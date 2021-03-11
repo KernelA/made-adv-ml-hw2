@@ -1,0 +1,29 @@
+to-pandas-pickle:
+  cmd: python ./to_pandas.py -i ./data/raw_data/chgk.zip -o ./data/pickle_data
+  deps:
+  - path: ./data/raw_data/chgk.zip
+    md5: 5d57364ef120d752bf920baec82dc030
+    size: 176605878
+  - path: ./to_pandas.py
+    md5: 20f6c3bbf054cce8a7364052dfd9f8f8
+    size: 1851
+  outs:
+  - path: ./data/pickle_data
+    md5: b6a840d2ec9780d5779850c4b720e836.dir
+    size: 12803954
+    nfiles: 2
+filter-team-res:
+  cmd: python ./filter_results.py -i ./data/raw_data/chgk.zip --tournaments ./data/pickle_data/tournaments-dt.pickle
+    -o ./data/team_res
+  deps:
+  - path: ./data/pickle_data/tournaments-dt.pickle
+    md5: b7a2f034d6996163e600a6c7f74f5887
+    size: 588847
+  - path: ./filter_results.py
+    md5: 6ef217f7a61baeb4a08dca116b578785
+    size: 1439
+  outs:
+  - path: ./data/team_res
+    md5: 2a99106a6489ea730918c8df3f4627a1.dir
+    size: 26605543
+    nfiles: 1
