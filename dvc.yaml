@@ -7,13 +7,13 @@ stages:
       - ./rating_model
     outs:
       - ./data/pickle_data
-  filter-team-res:
+  train_test_split:
     cmd:
-      python ./filter_results.py -i ./data/raw_data/chgk.zip --tournaments ./data/pickle_data/tournaments-dt.pickle
+      python ./train_test_split.py -i ./data/raw_data/chgk.zip --tournaments ./data/pickle_data/tournaments-dt.pickle
       -o ./data/team_res
     deps:
       - ./data/pickle_data/tournaments-dt.pickle
-      - ./filter_results.py
+      - ./train_test_split.py
       - ./rating_model
     outs:
       - ./data/team_res

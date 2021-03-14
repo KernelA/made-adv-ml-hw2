@@ -54,6 +54,7 @@ class Team:
     def __post_init__(self):
         assert self.team_id >= 0,  "Team id is negative"
         assert self.position is None or self.position >= 0, "Position is negative"
+
         if self.mask is not None:
             new_values = []
             for value in self.mask:
@@ -95,8 +96,7 @@ class Teams:
 
         for team_data in data:
             team = Team.from_dict(team_data)
-            if team.mask is not None and team.members:
-                teams.add_team(team)
+            teams.add_team(team)
 
         return teams
 
@@ -113,7 +113,7 @@ class Teams:
 @ dataclass
 class TeamResults:
     # Key is tournament_id
-    results: Dict[int, Teams] = field(init=False, default_factory=dict)
+    tours: Dict[int, Teams] = field(init=False, default_factory=dict)
 
     @ staticmethod
     def load_pickle(file_obj) -> "TeamResults":
@@ -123,19 +123,18 @@ class TeamResults:
 
         for tour_id in data:
             teams = Teams.from_dict(data[tour_id])
-            if len(teams) > 0:
-                results.add_result(tour_id, teams)
+            results.add_result(tour_id, teams)
 
         return results
 
     def add_result(self, result_id: int, teams: Teams):
-        self.results[result_id] = teams
+        self.tours[result_id] = teams
 
     def __len__(self):
-        return len(self.results)
+        return len(self.tours)
 
     def __getitem__(self, result_id: int) -> Teams:
-        return self.results[result_id]
+        return self.tours[result_id]
 
     def to_player_dataframe(self, tours_ids: MutableSet[int] = None) -> pd.DataFrame:
         records = []
@@ -144,9 +143,9 @@ class TeamResults:
         data = None
 
         if tours_ids is not None:
-            tours = filter(lambda x: x in tours_ids, self.results.keys())
+            tours = filter(lambda x: x in tours_ids, self.tours.keys())
         else:
-            tours = self.results.keys()
+            tours = self.tours.keys()
 
         for tour_id in tours:
             row = {"tour_id": tour_id}
@@ -156,7 +155,7 @@ class TeamResults:
                     answer_shift = len(self[tour_id][team_id].mask)
 
                 row["team_id"] = team_id
-                for player in self.results[tour_id][team_id].members:
+                for player in self.tours[tour_id][team_id].members:
                     row["player_id"] = player.player_id
                     for local_answer_id, answer in enumerate(self[tour_id][team_id].mask):
                         row["answer_id"] = global_answer_id_shift + local_answer_id
