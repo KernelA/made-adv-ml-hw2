@@ -136,22 +136,21 @@ class TeamResults:
     def __getitem__(self, result_id: int) -> Teams:
         return self.tours[result_id]
 
-    def to_player_dataframe(self, tours_ids: MutableSet[int] = None) -> pd.DataFrame:
+    def to_player_dataframe(self, filter_by_mask: bool = False) -> pd.DataFrame:
         records = []
         global_answer_id_shift = 0
 
         data = None
 
-        if tours_ids is not None:
-            tours = filter(lambda x: x in tours_ids, self.tours.keys())
-        else:
-            tours = self.tours.keys()
-
-        for tour_id in tours:
+        for tour_id in self.tours:
             row = {"tour_id": tour_id}
-            answer_shift = None
+            answer_shift = 0
+
             for team_id in self[tour_id]:
-                if answer_shift is None:
+                if (filter_by_mask and not self[tour_id][team_id].mask) or not self[tour_id][team_id].members:
+                    continue
+
+                if answer_shift == 0:
                     answer_shift = len(self[tour_id][team_id].mask)
 
                 row["team_id"] = team_id
@@ -170,5 +169,8 @@ class TeamResults:
                 records.clear()
 
             global_answer_id_shift += answer_shift
+
+        if records:
+            data = data.append(pd.DataFrame.from_records(records))
 
         return data

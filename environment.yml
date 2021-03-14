@@ -1,0 +1,10 @@
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - ipykernel
+  - pandas=1.2
+  - scipy=1.5
+  - scikit-learn=0.24
+  - pylint
+  - dvc-base=1.11
