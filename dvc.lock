@@ -5,27 +5,27 @@ to-pandas-pickle:
     md5: 5d57364ef120d752bf920baec82dc030
     size: 176605878
   - path: ./rating_model
-    md5: 9a0f5a9869c0963fa8e682590eeb7805.dir
-    size: 20655
+    md5: 25a2b57e5a96ff9248ee3a03dd9f74ea.dir
+    size: 20584
     nfiles: 10
   - path: ./to_pandas.py
     md5: 20f6c3bbf054cce8a7364052dfd9f8f8
     size: 1851
   outs:
   - path: ./data/pickle_data
-    md5: b6a840d2ec9780d5779850c4b720e836.dir
-    size: 12803954
+    md5: 26b96f425d786f622dc9ec30a732e129.dir
+    size: 12803752
     nfiles: 2
 train_test_split:
   cmd: python ./train_test_split.py -i ./data/raw_data/chgk.zip --tournaments ./data/pickle_data/tournaments-dt.pickle
     -o ./data/team_res
   deps:
   - path: ./data/pickle_data/tournaments-dt.pickle
-    md5: b7a2f034d6996163e600a6c7f74f5887
-    size: 588847
+    md5: 958f9401a09ff4f85a6938ebc0b9b5f5
+    size: 588693
   - path: ./rating_model
-    md5: 9a0f5a9869c0963fa8e682590eeb7805.dir
-    size: 20655
+    md5: 25a2b57e5a96ff9248ee3a03dd9f74ea.dir
+    size: 20584
     nfiles: 10
   - path: ./train_test_split.py
     md5: 8362f1718c1becd8aa4562a643c5c6dd
