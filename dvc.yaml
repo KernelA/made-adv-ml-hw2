@@ -2,15 +2,18 @@ stages:
   to-pandas-pickle:
     cmd: python ./to_pandas.py -i ./data/raw_data/chgk.zip -o ./data/pickle_data
     deps:
-    - ./data/raw_data/chgk.zip
-    - ./to_pandas.py
+      - ./data/raw_data/chgk.zip
+      - ./to_pandas.py
+      - ./rating_model
     outs:
-    - ./data/pickle_data
+      - ./data/pickle_data
   filter-team-res:
-    cmd: python ./filter_results.py -i ./data/raw_data/chgk.zip --tournaments ./data/pickle_data/tournaments-dt.pickle
+    cmd:
+      python ./filter_results.py -i ./data/raw_data/chgk.zip --tournaments ./data/pickle_data/tournaments-dt.pickle
       -o ./data/team_res
     deps:
-    - ./data/pickle_data/tournaments-dt.pickle
-    - ./filter_results.py
+      - ./data/pickle_data/tournaments-dt.pickle
+      - ./filter_results.py
+      - ./rating_model
     outs:
-    - ./data/team_res
+      - ./data/team_res

@@ -4,6 +4,10 @@ to-pandas-pickle:
   - path: ./data/raw_data/chgk.zip
     md5: 5d57364ef120d752bf920baec82dc030
     size: 176605878
+  - path: ./rating_model
+    md5: 17c2f2e3c3651bd4fca2deaf8f446fa9.dir
+    size: 20894
+    nfiles: 10
   - path: ./to_pandas.py
     md5: 20f6c3bbf054cce8a7364052dfd9f8f8
     size: 1851
@@ -22,8 +26,12 @@ filter-team-res:
   - path: ./filter_results.py
     md5: 6ef217f7a61baeb4a08dca116b578785
     size: 1439
+  - path: ./rating_model
+    md5: 17c2f2e3c3651bd4fca2deaf8f446fa9.dir
+    size: 20894
+    nfiles: 10
   outs:
   - path: ./data/team_res
-    md5: 2a99106a6489ea730918c8df3f4627a1.dir
-    size: 26605543
+    md5: da4606b7f414f5d7dee4c2de726c50ad.dir
+    size: 26496773
     nfiles: 1

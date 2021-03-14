@@ -1,17 +1,19 @@
 import pickle
 import warnings
 from dataclasses import dataclass, field, fields
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, MutableSet
 
-DATA_KEY_NAME = "key_path"
+import pandas as pd
+
+KEY_PATH = "key_path"
 
 
 def init_from_data(cls, data: dict):
     kv_pairs = {}
 
     for field in fields(cls):
-        if DATA_KEY_NAME in field.metadata:
-            key_path = list(field.metadata[DATA_KEY_NAME])
+        if KEY_PATH in field.metadata:
+            key_path = list(field.metadata[KEY_PATH])
             try:
                 data_value = data[key_path.pop(0)]
 
@@ -29,9 +31,12 @@ def init_from_data(cls, data: dict):
 
 @dataclass
 class Player:
-    player_id: int = field(metadata={DATA_KEY_NAME: ("player", "id")})
-    rating: int = field(metadata={DATA_KEY_NAME: ("rating",)})
-    used_rating: int = field(metadata={DATA_KEY_NAME: ("usedRating", )})
+    player_id: int = field(metadata={KEY_PATH: ("player", "id")})
+    rating: int = field(metadata={KEY_PATH: ("rating",)})
+    used_rating: int = field(metadata={KEY_PATH: ("usedRating", )})
+
+    def __post_init__(self):
+        assert self.player_id >= 0, "Player id is negative"
 
     @ classmethod
     def from_dict(cls, data: dict) -> "Player":
@@ -40,15 +45,24 @@ class Player:
 
 @ dataclass
 class Team:
-    team_id: int = field(metadata={DATA_KEY_NAME: ("team", "id")})
-    name: str = field(metadata={DATA_KEY_NAME: ("team", "name")})
-    mask: Optional[List[bool]] = field(metadata={DATA_KEY_NAME: ("mask",)})
-    position: int = field(metadata={DATA_KEY_NAME: ("position",)})
+    team_id: int = field(metadata={KEY_PATH: ("team", "id")})
+    name: str = field(metadata={KEY_PATH: ("team", "name")})
+    mask: Optional[Tuple[bool]] = field(metadata={KEY_PATH: ("mask",)})
+    position: Optional[int] = field(metadata={KEY_PATH: ("position",)})
     members: List[Player] = field(default_factory=list, init=False)
 
     def __post_init__(self):
+        assert self.team_id >= 0,  "Team id is negative"
+        assert self.position is None or self.position >= 0, "Position is negative"
         if self.mask is not None:
-            self.mask = list(map(bool, self.mask))
+            new_values = []
+            for value in self.mask:
+                try:
+                    new_values.append(bool(int(value)))
+                except ValueError as exc:
+                    warnings.warn(str(exc))
+                    new_values.append(False)
+            self.mask = tuple(new_values)
 
     @ classmethod
     def from_dict(cls, data: dict) -> "Team":
@@ -75,7 +89,7 @@ class Teams:
             raise ValueError("Team already exist")
         self.teams[team.team_id] = team
 
-    @classmethod
+    @ classmethod
     def from_dict(cls, data: List[dict]) -> "Teams":
         teams = cls()
 
@@ -88,6 +102,9 @@ class Teams:
 
     def __len__(self):
         return len(self.teams)
+
+    def __iter__(self):
+        return iter(self.teams)
 
     def __getitem__(self, team_id: int):
         return self.teams[team_id]
@@ -119,3 +136,40 @@ class TeamResults:
 
     def __getitem__(self, result_id: int) -> Teams:
         return self.results[result_id]
+
+    def to_player_dataframe(self, tours_ids: MutableSet[int] = None) -> pd.DataFrame:
+        records = []
+        global_answer_id_shift = 0
+
+        data = None
+
+        if tours_ids is not None:
+            tours = filter(lambda x: x in tours_ids, self.results.keys())
+        else:
+            tours = self.results.keys()
+
+        for tour_id in tours:
+            row = {"tour_id": tour_id}
+            answer_shift = None
+            for team_id in self[tour_id]:
+                if answer_shift is None:
+                    answer_shift = len(self[tour_id][team_id].mask)
+
+                row["team_id"] = team_id
+                for player in self.results[tour_id][team_id].members:
+                    row["player_id"] = player.player_id
+                    for local_answer_id, answer in enumerate(self[tour_id][team_id].mask):
+                        row["answer_id"] = global_answer_id_shift + local_answer_id
+                        row["is_right_answer"] = answer
+                        records.append(row.copy())
+
+            if len(records) > 5000:
+                if data is None:
+                    data = pd.DataFrame.from_records(records)
+                else:
+                    data = data.append(pd.DataFrame.from_records(records))
+                records.clear()
+
+            global_answer_id_shift += answer_shift
+
+        return data
