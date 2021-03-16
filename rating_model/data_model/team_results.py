@@ -2,10 +2,14 @@ import pickle
 import warnings
 from dataclasses import dataclass, field, fields
 from typing import Dict, List, Optional, Tuple, MutableSet
+import logging
 
+import tqdm
 import pandas as pd
 
 KEY_PATH = "key_path"
+
+LOGGER = logging.getLogger("rating_model.model")
 
 
 def init_from_data(cls, data: dict):
@@ -19,10 +23,9 @@ def init_from_data(cls, data: dict):
 
                 while key_path:
                     data_value = data_value[key_path.pop(0)]
-            except KeyError as exc:
+            except KeyError:
                 data_value = None
-                warnings.warn(
-                    f"Detect None value in path {str(exc)}.")
+                LOGGER.exception("Detect None value in path.")
 
             kv_pairs[field.name] = data_value
 
@@ -47,7 +50,7 @@ class Player:
 class Team:
     team_id: int = field(metadata={KEY_PATH: ("team", "id")})
     name: str = field(metadata={KEY_PATH: ("team", "name")})
-    mask: Optional[Tuple[bool]] = field(metadata={KEY_PATH: ("mask",)})
+    mask: Optional[Tuple[Optional[bool]]] = field(metadata={KEY_PATH: ("mask",)})
     position: Optional[int] = field(metadata={KEY_PATH: ("position",)})
     members: List[Player] = field(default_factory=list, init=False)
 
@@ -62,7 +65,7 @@ class Team:
                     new_values.append(bool(int(value)))
                 except ValueError as exc:
                     warnings.warn(str(exc))
-                    new_values.append(False)
+                    new_values.append(None)
             self.mask = tuple(new_values)
 
     @ classmethod
@@ -121,7 +124,7 @@ class TeamResults:
 
         results = TeamResults()
 
-        for tour_id in data:
+        for tour_id in tqdm.tqdm(data, total=len(data)):
             teams = Teams.from_dict(data[tour_id])
             results.add_result(tour_id, teams)
 
@@ -136,27 +139,60 @@ class TeamResults:
     def __getitem__(self, result_id: int) -> Teams:
         return self.tours[result_id]
 
+    def filter_incorrect_questions_tours(self):
+        total_none_questions = 0
+        total_questions = 0
+
+        for tour_id in tqdm.tqdm(self.tours, total=len(self), desc="Filter questions"):
+            answers = []
+
+            for team_id in self.tours[tour_id].teams:
+                if self.tours[tour_id][team_id].mask is not None:
+                    answers.append(self.tours[tour_id][team_id].mask)
+            if answers:
+                # transpose table
+                answers = tuple(zip(*answers))
+                delete_row = []
+                for row_index in range(len(answers)):
+                    if any(map(lambda x: x is None, answers[row_index])):
+                        delete_row.append(row_index)
+
+                total_none_questions += len(delete_row)
+                total_questions += len(answers)
+                # transpose again return original order
+                filtered_answer = tuple(
+                    zip(*tuple(row for i, row in enumerate(answers) if i not in delete_row)))
+
+                index = 0
+                for team_id in self.tours[tour_id].teams:
+                    if self.tours[tour_id][team_id].mask is not None:
+                        self.tours[tour_id][team_id].mask = filtered_answer[index]
+                        index += 1
+        LOGGER.info("Detect total incorrect answers %d from %d",
+                    total_none_questions, total_questions)
+
     def to_player_dataframe(self, filter_by_mask: bool = False) -> pd.DataFrame:
         records = []
         global_answer_id_shift = 0
 
         data = None
 
-        for tour_id in self.tours:
+        for tour_id in tqdm.tqdm(self.tours, total=len(self), desc="Convert to dataframe"):
             row = {"tour_id": tour_id}
             answer_shift = 0
 
             for team_id in self[tour_id]:
-                if (filter_by_mask and not self[tour_id][team_id].mask) or not self[tour_id][team_id].members:
+                team = self[tour_id][team_id]
+                if (filter_by_mask and not team.mask) or not team.members:
                     continue
 
                 if answer_shift == 0:
-                    answer_shift = len(self[tour_id][team_id].mask)
+                    answer_shift = len(team.mask)
 
                 row["team_id"] = team_id
-                for player in self.tours[tour_id][team_id].members:
+                for player in team.members:
                     row["player_id"] = player.player_id
-                    for local_answer_id, answer in enumerate(self[tour_id][team_id].mask):
+                    for local_answer_id, answer in enumerate(team.mask):
                         row["answer_id"] = global_answer_id_shift + local_answer_id
                         row["is_right_answer"] = answer
                         records.append(row.copy())

@@ -34,6 +34,7 @@ def main(args):
         with zip_file.open("results.pkl", "r") as file_info:
             results = TeamResults.load_pickle(file_info)
 
+    results.filter_incorrect_questions_tours()
     train_tour_ids = tours.index[tours["dateStart"].dt.year == args.train_year]
     test_tour_ids = tours.index[tours["dateStart"].dt.year == args.test_year]
 
