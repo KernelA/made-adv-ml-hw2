@@ -2,7 +2,7 @@ import pickle
 import warnings
 from operator import attrgetter
 from dataclasses import dataclass, field, fields
-from typing import Dict, List, Optional, Tuple, MutableSet
+from typing import Dict, List, Optional, Tuple
 import logging
 
 import tqdm
