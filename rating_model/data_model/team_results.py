@@ -1,5 +1,6 @@
 import pickle
 import warnings
+from operator import attrgetter
 from dataclasses import dataclass, field, fields
 from typing import Dict, List, Optional, Tuple, MutableSet
 import logging
@@ -125,8 +126,9 @@ class TeamResults:
         results = TeamResults()
 
         for tour_id in tqdm.tqdm(data, total=len(data)):
-            teams = Teams.from_dict(data[tour_id])
-            results.add_result(tour_id, teams)
+            if data[tour_id]:
+                teams = Teams.from_dict(data[tour_id])
+                results.add_result(tour_id, teams)
 
         return results
 
@@ -135,6 +137,9 @@ class TeamResults:
 
     def __len__(self):
         return len(self.tours)
+
+    def __iter__(self):
+        return iter(self.tours)
 
     def __getitem__(self, result_id: int) -> Teams:
         return self.tours[result_id]
@@ -210,3 +215,14 @@ class TeamResults:
             data = data.append(pd.DataFrame.from_records(records))
 
         return data
+
+    def to_team_rating_by_tour(self) -> pd.DataFrame:
+        tours_res = []
+        for tour_id in self:
+            for team_id in self[tour_id].teams:
+                team = self[tour_id][team_id]
+                if team.members:
+                    tours_res.append({"tour_id": tour_id, "members": tuple(
+                        map(attrgetter("player_id"), team.members)), "team_id": team_id, "tour_rating": team.position})
+
+        return pd.DataFrame.from_records(tours_res)
