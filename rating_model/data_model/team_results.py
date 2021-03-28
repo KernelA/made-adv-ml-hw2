@@ -206,7 +206,7 @@ class TeamResults:
                 if data is None:
                     data = pd.DataFrame.from_records(records)
                 else:
-                    data = data.append(pd.DataFrame.from_records(records))
+                    data = data.append(pd.DataFrame.from_records(records), ignore_index=True)
                 records.clear()
 
             global_answer_id_shift += answer_shift
