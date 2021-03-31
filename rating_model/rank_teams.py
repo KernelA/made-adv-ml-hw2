@@ -36,6 +36,7 @@ def rank_teams(teams: pd.DataFrame, player_skills: pd.DataFrame):
 
 def estimate_rank(team_res: pd.DataFrame, player_ratings: pd.DataFrame):
     kendall_values = []
+    spearmen_values = []
     for tour_id, teams in team_res.groupby("tour_id"):
         new_teams = teams[["members", "tour_rating"]].copy()
         new_teams.reset_index(inplace=True)
@@ -43,4 +44,5 @@ def estimate_rank(team_res: pd.DataFrame, player_ratings: pd.DataFrame):
         new_teams = rank_teams(new_teams, player_ratings)
         rank_order = new_teams.index.to_numpy()
         kendall_values.append(stats.kendalltau(original_order, rank_order)[0])
-    return np.nanmean(kendall_values)
+        spearmen_values.append(stats.spearmanr(original_order, rank_order)[0])
+    return {"kendall": np.nanmean(kendall_values), "spearman": np.nanmean(spearmen_values)}
