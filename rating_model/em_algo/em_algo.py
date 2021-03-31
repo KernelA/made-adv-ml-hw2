@@ -45,7 +45,7 @@ class EMRatingModel:
         self._zeroing_mask = torch.zeros_like(self._target, dtype=torch.bool)
         self._player_indices_in_team_by_round = self._build_player_team_round_indices(
             players_info)
-        self._hidden_variables = torch.zeros_like(self._target)
+        self._hidden_variables = self._target.clone()
         self.model = LogisticRegressionTorch(self._features.shape[1])
         self.model.to(self._device)
         self.model.init_xavier()
@@ -121,10 +121,10 @@ class EMRatingModel:
 
         iterations = trange(self._em_num_iter, desc="EM algorithm")
         for _ in iterations:
-            iterations.set_description_str("E step")
-            self._expectation()
             iterations.set_description_str("M step")
             self._maximization()
+            iterations.set_description_str("E step")
+            self._expectation()
             weights, _ = self.model.get_params()
             self._validate(weights.numpy(), skill_encoder, test_team_ratings)
 
@@ -133,7 +133,7 @@ class EMRatingModel:
     def _validate(self, weights: np.ndarray, skill_encoder: OneHotEncoder, test_team_ratings: pd.DataFrame):
         player_ratings = get_player_skills(skill_encoder, weights)
         player_ratings.sort_values("skill", inplace=True)
-        self._logger.info("Kendall: %f", estimate_rank(test_team_ratings, player_ratings))
+        self._logger.info("Corr coef: %s", estimate_rank(test_team_ratings, player_ratings))
 
     def _maximization(self):
         optimizer = optim.Adam(self.model.parameters(), self._lr)
