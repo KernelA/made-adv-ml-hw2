@@ -1,37 +1,49 @@
-to-pandas-pickle:
-  cmd: python ./to_pandas.py -i ./data/raw_data/chgk.zip -o ./data/pickle_data
-  deps:
-  - path: ./data/raw_data/chgk.zip
-    md5: 5d57364ef120d752bf920baec82dc030
-    size: 176605878
-  - path: ./rating_model
-    md5: c057bbaa05eaf7ea3b94a8b7348c4c6f.dir
-    size: 25048
-    nfiles: 12
-  - path: ./to_pandas.py
-    md5: 20f6c3bbf054cce8a7364052dfd9f8f8
-    size: 1851
-  outs:
-  - path: ./data/pickle_data
-    md5: b6a840d2ec9780d5779850c4b720e836.dir
-    size: 12803954
-    nfiles: 2
-train_test_split:
-  cmd: python ./train_test_split.py -i ./data/raw_data/chgk.zip --tournaments ./data/pickle_data/tournaments-dt.pickle
-    -o ./data/team_res
-  deps:
-  - path: ./data/pickle_data/tournaments-dt.pickle
-    md5: b7a2f034d6996163e600a6c7f74f5887
-    size: 588847
-  - path: ./rating_model
-    md5: c057bbaa05eaf7ea3b94a8b7348c4c6f.dir
-    size: 25048
-    nfiles: 12
-  - path: ./train_test_split.py
-    md5: 1967eb5d2c6e53e4cb2d1c5e9fc25a86
-    size: 2177
-  outs:
-  - path: ./data/team_res
-    md5: 9292b87497ae2b9a00afe7ef712bdc7b.dir
-    size: 26201806
-    nfiles: 2
+schema: '2.0'
+stages:
+  to-pandas-pickle:
+    cmd: python ./to_pandas.py -i ./data/raw_data/chgk.zip -o ./data/pickle_data
+    deps:
+    - path: ./data/raw_data/chgk.zip
+      md5: 5d57364ef120d752bf920baec82dc030
+      size: 176605878
+    - path: ./rating_model
+      md5: c057bbaa05eaf7ea3b94a8b7348c4c6f.dir
+      size: 25048
+      nfiles: 12
+    - path: ./to_pandas.py
+      md5: 20f6c3bbf054cce8a7364052dfd9f8f8
+      size: 1851
+    outs:
+    - path: ./data/pickle_data
+      md5: b6a840d2ec9780d5779850c4b720e836.dir
+      size: 12803954
+      nfiles: 2
+  train_test_split:
+    cmd: python ./train_test_split.py -i ./data/raw_data/chgk.zip --tournaments ./data/pickle_data/tournaments-dt.pickle
+      -o ./data/team_res
+    deps:
+    - path: ./data/pickle_data/tournaments-dt.pickle
+      md5: b7a2f034d6996163e600a6c7f74f5887
+      size: 588847
+    - path: ./rating_model
+      md5: c057bbaa05eaf7ea3b94a8b7348c4c6f.dir
+      size: 25048
+      nfiles: 12
+    - path: ./train_test_split.py
+      md5: 1967eb5d2c6e53e4cb2d1c5e9fc25a86
+      size: 2177
+    outs:
+    - path: ./data/team_res
+      md5: 9292b87497ae2b9a00afe7ef712bdc7b.dir
+      size: 26201806
+      nfiles: 2
+  test_log_reg:
+    cmd: python ./test_log_reg.py
+    deps:
+    - path: ./rating_model
+      md5: c210e94a9422d8e81466a75efa500c3b.dir
+      size: 51054
+      nfiles: 25
+    - path: ./test_log_reg.py
+      md5: aeb8338a62e8b4ccac579090455a58cf
+      size: 873
