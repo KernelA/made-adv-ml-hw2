@@ -43,7 +43,7 @@ class Trainer:
             loss = functional.binary_cross_entropy_with_logits(
                 predicted_logits, device_target, reduction="mean")
 
-            mae_loss = functional.l1_loss(torch.sigmoid(predicted_logits), target)
+            mae_loss = functional.l1_loss(torch.sigmoid(predicted_logits.cpu()), target)
 
             loss.backward()
             self._optimizer.step()
