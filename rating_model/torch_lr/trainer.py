@@ -1,5 +1,6 @@
 import logging
 
+import torch
 from torch.nn import functional
 from torch.utils import data
 import tqdm
@@ -33,14 +34,18 @@ class Trainer:
         device_target = target.to(self._device)
         self.model.train()
 
-        for _ in tqdm.trange(self._num_iter):
+        iterator = tqdm.trange(self._num_iter, desc="Train logistic regression")
+
+        for _ in iterator:
             self._optimizer.zero_grad()
 
             predicted_logits = self.model(device_features)
             loss = functional.binary_cross_entropy_with_logits(
-                predicted_logits, device_target, reduction="sum")
+                predicted_logits, device_target, reduction="mean")
+
+            mae_loss = functional.l1_loss(torch.sigmoid(predicted_logits), target)
 
             loss.backward()
             self._optimizer.step()
 
-            self._logger.info("Loss: %f", loss.item())
+            iterator.set_postfix({"Loss": loss.item(), "mae_loss": mae_loss.item()})
