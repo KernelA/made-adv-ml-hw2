@@ -3,15 +3,14 @@ import pandas as pd
 from scipy import stats
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder
+import random
 
 
 def get_player_skills(skill_encoder: OneHotEncoder, coefs: np.ndarray) -> pd.DataFrame:
-    rows = []
-    all_players_ids = skill_encoder.categories_[0]
-    for player_id in all_players_ids:
-        rows.append({"player_id": player_id, "skill": coefs[np.where(
-            all_players_ids == player_id)[0][0]]})
-    return pd.DataFrame.from_records(rows, index="player_id")
+    """coefs contains a skill of players in the begin and follow complexity of the questions
+    """
+    player_ids = skill_encoder.categories_[0]
+    return pd.DataFrame({"skill": coefs[:len(player_ids)]}, index=player_ids)
 
 
 def player2ratings(players_id, player_ratings):
