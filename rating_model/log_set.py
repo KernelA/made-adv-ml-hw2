@@ -36,7 +36,7 @@ LOGGER_SETUP = {
         }
     },
     'root': {
-        'level': 'DEBUG',
+        'level': 'INFO',
         'handlers': ['default_console']
     }
 }
