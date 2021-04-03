@@ -17,6 +17,9 @@ class LogisticRegressionTorch(nn.Module):
     def init_xavier(self) -> None:
         torch.nn.init.xavier_normal_(self.lin_layer.weight)
 
+    def init_pretrained(self, state_dict: dict) -> None:
+        self.lin_layer.load_state_dict(state_dict)
+
     def predict_proba(self, features) -> torch.Tensor:
         return torch.sigmoid(self.forward(features))
 

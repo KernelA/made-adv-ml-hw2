@@ -26,10 +26,10 @@ def player2ratings(players_id, player_ratings):
 
 def rank_teams(teams: pd.DataFrame, player_skills: pd.DataFrame):
     ranking_teams = teams.copy()
-    ranking_teams["player_skils"] = ranking_teams["members"].apply(
+    ranking_teams["player_skills"] = ranking_teams["members"].apply(
         lambda x: player2ratings(x, player_skills))
-    ranking_teams.sort_values("player_skils", ascending=False, inplace=True)
-    ranking_teams.drop("player_skils", axis="columns", inplace=True)
+    ranking_teams.sort_values("player_skills", ascending=False, inplace=True)
+    ranking_teams.drop("player_skills", axis="columns", inplace=True)
     return ranking_teams
 
 
@@ -44,4 +44,4 @@ def estimate_rank(team_res: pd.DataFrame, player_ratings: pd.DataFrame):
         rank_order = new_teams.index.to_numpy()
         kendall_values.append(stats.kendalltau(original_order, rank_order)[0])
         spearmen_values.append(stats.spearmanr(original_order, rank_order)[0])
-    return {"kendall": np.nanmean(kendall_values), "spearman": np.nanmean(spearmen_values)}
+    return {"Kendall": np.nanmean(kendall_values), "Spearman": np.nanmean(spearmen_values)}

@@ -1,5 +1,6 @@
 import logging
 from itertools import repeat
+import math
 
 import pandas as pd
 import torch
@@ -8,6 +9,7 @@ from torch import optim
 from tqdm import trange
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder
+from torch.utils.tensorboard import SummaryWriter
 
 from ..torch_lr import LogisticRegressionTorch, Trainer
 from ..rank_teams import get_player_skills, estimate_rank
@@ -15,7 +17,7 @@ from ..rank_teams import get_player_skills, estimate_rank
 
 class EMRatingModel:
     def __init__(self, *, em_num_iter: int,
-                 lr: float, log_reg_num_iter: int, device):
+                 lr: float, log_reg_num_iter: int, device, log_dir: str):
         assert lr > 0
         assert em_num_iter > 0
         assert log_reg_num_iter > 0
@@ -28,8 +30,11 @@ class EMRatingModel:
         self._log_reg_num_iter = log_reg_num_iter
         self._lr = lr
         self._device = device
+        self._last_valid_metrics = None
+        self._baseline_est = None
+        self._log_dir = log_dir
 
-    def _init_data(self, sparse_features, target, players_info: pd.DataFrame):
+    def _init_data(self, sparse_features, target, players_info: pd.DataFrame, baseline_est: dict, init_weights=None, bias=None):
         assert sparse_features.shape[0] == target.shape[0], "Number of samples is not equal number of targets"
         assert sparse.isspmatrix_coo(sparse_features), "Features must be in COO format"
 
@@ -42,27 +47,39 @@ class EMRatingModel:
         # для вектаризации всех вычислений и избавления от циклов
         # значение по этому индексу всегда равно 0
         self._pad_index = target.shape[0]
-        self._zeroing_mask = torch.zeros_like(self._target, dtype=torch.bool)
+        self._zeroing_mask = torch.ones_like(self._target, dtype=torch.bool)
         self._player_indices_in_team_by_round = self._build_player_team_round_indices(
             players_info)
         self._hidden_variables = self._target.clone()
+        self._baseline_est = baseline_est
+        # Add fake 0 value for vectorize idexing operations
+        self._predicted_proba = torch.zeros(self._hidden_variables.shape[0] + 1)
         self.model = LogisticRegressionTorch(self._features.shape[1])
         self.model.to(self._device)
-        self.model.init_xavier()
+        if init_weights is not None:
+            self.model.init_pretrained({"weight": torch.tensor(init_weights), "bias": torch.tensor(bias)})
+        else:
+            self.model.init_xavier()
 
     def _clear_data(self):
         self._features = None
         self._target = None
+        self._pad_index = None
         self._zeroing_mask = None
         self._hidden_variables = None
         self._player_indices_in_team_by_round = None
+        self._last_valid_metrics = None
+        self._baseline_est = None
+        self._predicted_proba = None
 
     def _build_player_team_round_indices(self, player_info) -> torch.LongTensor:
-        self._logger.info("Build indices masks")
+        self._logger.info("Building mask for zeroing hidden variables")
         player_indices_in_team_by_round = []
 
-        tour_team_id = pd.Series((player_info["tour_id"].astype(
-            str) + " " + player_info["team_id"].astype(str)).factorize()[0])
+        # Number of digits
+        base = 10 ** math.ceil(math.log10(player_info["team_id"].max()))
+        self._logger.info("Use %d as base value for grouping", base)
+        tour_team_id = pd.Series(pd.factorize(player_info["tour_id"] * base + player_info["team_id"])[0])
 
         max_length = -1
 
@@ -75,10 +92,10 @@ class EMRatingModel:
 
         for i in trange(len(player_indices_in_team_by_round)):
             indices = player_indices_in_team_by_round[i]
-            if len(indices) < max_length:
-                if (self._target[indices] > 0).any():
-                    self._zeroing_mask[indices] = True
+            if (self._target[indices] > 0).any():
+                self._zeroing_mask[indices] = False
 
+            if len(indices) < max_length:
                 player_indices_in_team_by_round[i].extend(
                     repeat(self._pad_index, max_length - len(indices)))
 
@@ -109,34 +126,56 @@ class EMRatingModel:
         """
         self._hidden_variables.fill_(0)
         features = self._features.to(self._device)
-        predicted_proba = self.model.predict_proba(features).cpu().view(-1)
-        # Add fake value for vectorizing idexing operations
-        predicted_proba = torch.cat(
-            (predicted_proba, torch.tensor([0], dtype=predicted_proba.dtype)))
-        self._update_hidden_values(predicted_proba)
+        pred_proba = self.model.predict_proba(features).cpu().view(-1)
+        assert pred_proba.shape[0] == self._hidden_variables.shape[0]
+        # This tensor contains fake value is equal to 0 at last position
+        self._predicted_proba[:self._hidden_variables.shape[0]] = self.model.predict_proba(features).cpu().view(-1)
+        self._update_hidden_values(self._predicted_proba)
 
     def fit(self, sparse_features, target, players_info: pd.DataFrame,
-            skill_encoder: OneHotEncoder, test_team_ratings: pd.DataFrame):
-        self._init_data(sparse_features, target, players_info)
+            skill_encoder: OneHotEncoder, test_team_ratings: pd.DataFrame, baseline_est: dict,
+            init_weights: np.ndarray = None, init_bias: np.ndarray = None):
+        self._init_data(sparse_features, target, players_info, baseline_est, init_weights, init_bias)
 
-        iterations = trange(self._em_num_iter, desc="EM algorithm")
-        for _ in iterations:
-            iterations.set_description_str("M step")
-            self._maximization()
-            iterations.set_description_str("E step")
-            self._expectation()
-            weights, _ = self.model.get_params()
-            self._validate(weights.numpy(), skill_encoder, test_team_ratings)
+        with SummaryWriter(self._log_dir, flush_secs=10) as writer:
+            iterations = trange(self._em_num_iter, desc="EM algorithm")
+            for step in iterations:
+                iterations.set_description_str("E step")
+                self._expectation()
+                iterations.set_description_str("M step")
+                self._maximization(step, writer)
+                weights, _ = self.model.get_params()
+                self._validate(step, weights.numpy(), skill_encoder, test_team_ratings, writer)
 
         self._clear_data()
 
-    def _validate(self, weights: np.ndarray, skill_encoder: OneHotEncoder, test_team_ratings: pd.DataFrame):
+    def _validate(self, step: int, weights: np.ndarray, skill_encoder: OneHotEncoder,
+                  test_team_ratings: pd.DataFrame, writer: SummaryWriter):
         player_ratings = get_player_skills(skill_encoder, weights)
-        player_ratings.sort_values("skill", inplace=True)
-        self._logger.info("Corr coef: %s", estimate_rank(test_team_ratings, player_ratings))
+        new_valid_metrics = estimate_rank(test_team_ratings, player_ratings)
 
-    def _maximization(self):
+        self._logger.info("Absolute difference relative to baseline:")
+        for metric_name in new_valid_metrics:
+            diff = new_valid_metrics[metric_name] - self._baseline_est[metric_name]
+            self._logger.info("%s %+.6f", metric_name, diff)
+            writer.add_scalar(f"Train/Diff_relative_to_baseline/{metric_name}", diff, global_step=step)
+
+        if self._last_valid_metrics is not None:
+            self._logger.info("Absolute difference relative to previous params:")
+            for metric_name in new_valid_metrics:
+                diff = new_valid_metrics[metric_name] - self._last_valid_metrics[metric_name]
+                self._logger.info("%s %+.6f", metric_name, diff)
+                writer.add_scalar(f"Train/Diff relative to prev_params/{metric_name}", diff, global_step=step)
+
+        self._last_valid_metrics = new_valid_metrics
+        writer.add_scalars("Train/Corr coefficients", self._last_valid_metrics, global_step=step)
+        self._logger.info("Corr coefficients: %s", self._last_valid_metrics)
+
+    def _maximization(self, em_step: int, writer: SummaryWriter):
         optimizer = optim.Adam(self.model.parameters(), self._lr)
-        trainer = Trainer(self.model, optimizer, self._log_reg_num_iter, self._device)
-        trainer.fit(self._features, self._hidden_variables.reshape(-1, 1))
+        lr_sheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, min_lr=1e-6, patience=max(self._log_reg_num_iter // 4, 3))
+        trainer = Trainer(model=self.model, em_step=em_step, optimizer=optimizer, num_iter=self._log_reg_num_iter,
+                          device=self._device, sheduler=lr_sheduler, writer=writer)
+        trainer.fit(self._features, self._hidden_variables.view(-1, 1))
         self.model.eval()
