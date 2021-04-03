@@ -140,3 +140,4 @@ cython_debug/
 .vscode/
 model/
 dump/
+em_train/

@@ -4,3 +4,5 @@
 
 [Описание API](http://api.rating.chgk.net/tournaments)
 
+[Рейтинг игроков](https://rating.chgk.info/players.php)
+
