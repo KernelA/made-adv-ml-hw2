@@ -36,6 +36,9 @@ def rank_teams(teams: pd.DataFrame, player_skills: pd.DataFrame):
 def estimate_rank(team_res: pd.DataFrame, player_ratings: pd.DataFrame):
     kendall_values = []
     spearmen_values = []
+    team_res.dropna(axis="index", inplace=True)
+    team_res.sort_values(["tour_id", "tour_rating"], inplace=True)
+
     for tour_id, teams in team_res.groupby("tour_id"):
         new_teams = teams[["members", "tour_rating"]].copy()
         new_teams.reset_index(inplace=True)
