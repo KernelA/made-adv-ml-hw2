@@ -2,6 +2,7 @@ from typing import Tuple
 
 import torch
 from torch import nn
+from ..constants import PICKLE_PROTOCOL
 
 
 class LogisticRegressionTorch(nn.Module):
@@ -28,3 +29,13 @@ class LogisticRegressionTorch(nn.Module):
         linear_weights = self.lin_layer.weight[0].detach().clone().cpu()
         bias = self.lin_layer.bias.detach().clone().cpu()
         return linear_weights, bias
+
+    def save_state(self, path_to_checkpoint) -> None:
+        with open(path_to_checkpoint, "wb") as checkpoint_file:
+            torch.save(self.state_dict(), checkpoint_file, pickle_protocol=PICKLE_PROTOCOL)
+
+    @staticmethod
+    def load_from_checkpoint(model, path_to_checkpoint) -> None:
+        with open(path_to_checkpoint, "wb") as checkpoint_file:
+            state = torch.load(checkpoint_file)
+            model.load_state_dict(state)

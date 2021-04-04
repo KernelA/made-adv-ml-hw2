@@ -1,6 +1,8 @@
+from collections import defaultdict
 import logging
 from itertools import repeat
 import math
+import os
 
 import pandas as pd
 import torch
@@ -17,14 +19,16 @@ from ..rank_teams import get_player_skills, estimate_rank
 
 class EMRatingModel:
     def __init__(self, *, em_num_iter: int,
-                 lr: float, log_reg_num_iter: int, device, log_dir: str):
+                 lr: float, log_reg_num_iter: int, device, log_dir: str, checkpoint_dir: str):
         assert lr > 0
         assert em_num_iter > 0
         assert log_reg_num_iter > 0
+        assert os.path.isdir(log_dir)
+        assert os.path.isdir(checkpoint_dir)
 
         self._logger = logging.getLogger("rating_model.em_algo")
         if device.type == "cpu":
-            self._logger.warning("Device for PyTorch training is CPU. Training may be very slow")
+            self._logger.warning("Device for PyTorch training is CPU. Training may be slow than on GPU")
         self._logger.info("Will train logistic regression on %s", device)
         self._em_num_iter = em_num_iter
         self._log_reg_num_iter = log_reg_num_iter
@@ -33,8 +37,10 @@ class EMRatingModel:
         self._last_valid_metrics = None
         self._baseline_est = None
         self._log_dir = log_dir
+        self._checkpoint_dir = checkpoint_dir
 
-    def _init_data(self, sparse_features, target, players_info: pd.DataFrame, baseline_est: dict, init_weights=None, bias=None):
+    def _init_data(self, sparse_features, target, players_info: pd.DataFrame,
+                   baseline_est: dict, init_weights=None, bias=None):
         assert sparse_features.shape[0] == target.shape[0], "Number of samples is not equal number of targets"
         assert sparse.isspmatrix_coo(sparse_features), "Features must be in COO format"
 
@@ -43,15 +49,16 @@ class EMRatingModel:
             size=sparse_features.shape, dtype=torch.get_default_dtype())
         assert self._features.shape == sparse_features.shape, "Sparse tensor features shapes is not equal an original features"
         self._target = torch.from_numpy(target).to(torch.get_default_dtype())
-        # _pad_index это фейковый индекс и нужен только для того чтобы использовать функцию torch.take
-        # для вектаризации всех вычислений и избавления от циклов
-        # значение по этому индексу всегда равно 0
+        # _pad_index is a fake index and it needed only for torch.take
+        # Drop all loops
+        # Values with this index is equal 0 always
         self._pad_index = target.shape[0]
         self._zeroing_mask = torch.ones_like(self._target, dtype=torch.bool)
         self._player_indices_in_team_by_round = self._build_player_team_round_indices(
             players_info)
         self._hidden_variables = self._target.clone()
         self._baseline_est = baseline_est
+        self._best_metrics_value = None
         # Add fake 0 value for vectorize idexing operations
         self._predicted_proba = torch.zeros(self._hidden_variables.shape[0] + 1)
         self.model = LogisticRegressionTorch(self._features.shape[1])
@@ -71,8 +78,10 @@ class EMRatingModel:
         self._last_valid_metrics = None
         self._baseline_est = None
         self._predicted_proba = None
+        self._best_metrics = None
+        self._best_metrics_value = None
 
-    def _build_player_team_round_indices(self, player_info) -> torch.LongTensor:
+    def _build_player_team_round_indices(self, player_info: pd.DataFrame) -> torch.LongTensor:
         self._logger.info("Building mask for zeroing hidden variables")
         player_indices_in_team_by_round = []
 
@@ -101,6 +110,9 @@ class EMRatingModel:
 
         return torch.LongTensor(player_indices_in_team_by_round)
 
+    def best_checkpoint_file(self) -> str:
+        return os.path.join(self._checkpoint_dir, "best_checkpoint.pt")
+
     @torch.no_grad()
     def _update_hidden_values(self, predicted_proba) -> None:
         """Update values of hidden variables
@@ -115,7 +127,7 @@ class EMRatingModel:
             not_fake_indices = index[not_fake_mask]
             self._hidden_variables[not_fake_indices] = predicted_proba_by_groups[i, not_fake_mask]
 
-        self._hidden_variables.nan_to_num_(0)
+        self._hidden_variables[~torch.isfinite(self._hidden_variables)] = 0.0
         self._hidden_variables.masked_fill_(self._zeroing_mask, 0.0)
 
     @ torch.no_grad()
@@ -134,8 +146,10 @@ class EMRatingModel:
 
     def fit(self, sparse_features, target, players_info: pd.DataFrame,
             skill_encoder: OneHotEncoder, test_team_ratings: pd.DataFrame, baseline_est: dict,
-            init_weights: np.ndarray = None, init_bias: np.ndarray = None):
+            init_weights: np.ndarray = None, init_bias: np.ndarray = None) -> dict:
         self._init_data(sparse_features, target, players_info, baseline_est, init_weights, init_bias)
+
+        target_metrics = defaultdict(list)
 
         with SummaryWriter(self._log_dir, flush_secs=10) as writer:
             iterations = trange(self._em_num_iter, desc="EM algorithm")
@@ -147,28 +161,52 @@ class EMRatingModel:
                 weights, _ = self.model.get_params()
                 self._validate(step, weights.numpy(), skill_encoder, test_team_ratings, writer)
 
+                target_metrics["em_iter"].append(step)
+                for metric_name in self._last_valid_metrics:
+                    target_metrics[metric_name].append(self._last_valid_metrics[metric_name])
+
         self._clear_data()
 
-    def _validate(self, step: int, weights: np.ndarray, skill_encoder: OneHotEncoder,
+        return target_metrics
+
+    def _validate(self, em_step: int, weights: np.ndarray, skill_encoder: OneHotEncoder,
                   test_team_ratings: pd.DataFrame, writer: SummaryWriter):
         player_ratings = get_player_skills(skill_encoder, weights)
         new_valid_metrics = estimate_rank(test_team_ratings, player_ratings)
+
+        is_new_model_best = False
 
         self._logger.info("Absolute difference relative to baseline:")
         for metric_name in new_valid_metrics:
             diff = new_valid_metrics[metric_name] - self._baseline_est[metric_name]
             self._logger.info("%s %+.6f", metric_name, diff)
-            writer.add_scalar(f"Train/Diff_relative_to_baseline/{metric_name}", diff, global_step=step)
+            if writer is not None:
+                writer.add_scalar(f"Train/Diff_relative_to_baseline/{metric_name}", diff, global_step=em_step)
+
+        if self._best_metrics_value is None:
+            self._best_metrics_value = new_valid_metrics
+            is_new_model_best = True
+        elif all(new_valid_metrics[metric_name] > self._best_metrics_value[metric_name]
+                 for metric_name in new_valid_metrics):
+            self._best_metrics_value = new_valid_metrics
+            is_new_model_best = True
+
+        if is_new_model_best:
+            checkpoint_path = self.best_checkpoint_file()
+            self._logger.info("Save model state to '%s'", checkpoint_path)
+            self.model.save_state(checkpoint_path)
 
         if self._last_valid_metrics is not None:
             self._logger.info("Absolute difference relative to previous params:")
             for metric_name in new_valid_metrics:
                 diff = new_valid_metrics[metric_name] - self._last_valid_metrics[metric_name]
                 self._logger.info("%s %+.6f", metric_name, diff)
-                writer.add_scalar(f"Train/Diff relative to prev_params/{metric_name}", diff, global_step=step)
+                if writer is not None:
+                    writer.add_scalar(f"Train/Diff relative to prev_params/{metric_name}", diff, global_step=em_step)
 
         self._last_valid_metrics = new_valid_metrics
-        writer.add_scalars("Train/Corr coefficients", self._last_valid_metrics, global_step=step)
+        if writer is not None:
+            writer.add_scalars("Train/Corr coefficients", self._last_valid_metrics, global_step=em_step)
         self._logger.info("Corr coefficients: %s", self._last_valid_metrics)
 
     def _maximization(self, em_step: int, writer: SummaryWriter):

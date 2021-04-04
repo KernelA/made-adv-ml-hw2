@@ -56,7 +56,8 @@ class Trainer:
             self._optimizer.step()
 
             iterator.set_postfix(metrics)
-            self._writer.add_scalars(f"Train/EM step {self._em_step}", metrics, global_step=epoch)
+            if self._writer is not None:
+                self._writer.add_scalars(f"Train/EM step {self._em_step}", metrics, global_step=epoch)
 
             if self._sheduler is not None:
                 self._sheduler.step(loss_val)
