@@ -193,6 +193,8 @@ class TeamResults:
                     zip(*tuple(row for i, row in enumerate(answers) if i not in delete_row_indices)))
 
                 assert len(filtered_answer) == teams_with_mask or len(filtered_answer) == 0
+                question_length = len(filtered_answer[0])
+                assert all(map(lambda x: len(x) == question_length, filtered_answer))
 
                 for row_num, team_id in enumerate(team_ids):
                     assert self.tours[tour_id][team_id].mask is not None
