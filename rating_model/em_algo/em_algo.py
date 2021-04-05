@@ -48,19 +48,21 @@ class EMRatingModel:
             (sparse_features.row, sparse_features.col), sparse_features.data,
             size=sparse_features.shape, dtype=torch.get_default_dtype())
         assert self._features.shape == sparse_features.shape, "Sparse tensor features shapes is not equal an original features"
-        self._target = torch.from_numpy(target).to(torch.get_default_dtype())
         # _pad_index is a fake index and it needed only for torch.take
         # Drop all loops
         # Values with this index is equal 0 always
         self._pad_index = target.shape[0]
-        self._zeroing_mask = torch.ones_like(self._target, dtype=torch.bool)
+        self._zeroing_mask = torch.ones(target.shape[0], dtype=torch.bool)
         self._player_indices_in_team_by_round = self._build_player_team_round_indices(
-            players_info)
-        self._hidden_variables = self._target.clone()
+            players_info, target)
+        self._hidden_variables = torch.zeros(target.shape[0], dtype=torch.get_default_dtype())
         self._baseline_est = baseline_est
         self._best_metrics_value = None
         # Add fake 0 value for vectorize idexing operations
         self._predicted_proba = torch.zeros(self._hidden_variables.shape[0] + 1)
+        assert torch.is_floating_point(self._predicted_proba)
+        assert torch.is_floating_point(self._hidden_variables)
+
         self.model = LogisticRegressionTorch(self._features.shape[1])
         self.model.to(self._device)
         if init_weights is not None:
@@ -70,7 +72,6 @@ class EMRatingModel:
 
     def _clear_data(self):
         self._features = None
-        self._target = None
         self._pad_index = None
         self._zeroing_mask = None
         self._hidden_variables = None
@@ -81,7 +82,7 @@ class EMRatingModel:
         self._best_metrics = None
         self._best_metrics_value = None
 
-    def _build_player_team_round_indices(self, player_info: pd.DataFrame) -> torch.LongTensor:
+    def _build_player_team_round_indices(self, player_info: pd.DataFrame, target) -> torch.LongTensor:
         self._logger.info("Building mask for zeroing hidden variables")
         player_indices_in_team_by_round = []
 
@@ -101,7 +102,7 @@ class EMRatingModel:
 
         for i in trange(len(player_indices_in_team_by_round)):
             indices = player_indices_in_team_by_round[i]
-            if (self._target[indices] > 0).any():
+            if (target[indices] > 0).any():
                 self._zeroing_mask[indices] = False
 
             if len(indices) < max_length:
