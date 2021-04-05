@@ -3,7 +3,6 @@ import pandas as pd
 from scipy import stats
 import numpy as np
 from sklearn.preprocessing import OneHotEncoder
-import random
 
 
 def get_player_skills(skill_encoder: OneHotEncoder, coefs: np.ndarray) -> pd.DataFrame:
@@ -20,16 +19,18 @@ def player2ratings(players_id, player_ratings):
             ratings.append(player_ratings.loc[player_id, "skill"])
         except KeyError:
             pass
-    ratings.sort(reverse=True)
-    return tuple(ratings)
+    if ratings:
+        return np.mean(ratings)
+    else:
+        return float("nan")
 
 
 def rank_teams(teams: pd.DataFrame, player_skills: pd.DataFrame):
     ranking_teams = teams.copy()
-    ranking_teams["player_skills"] = ranking_teams["members"].apply(
+    ranking_teams["team_skill"] = ranking_teams["members"].apply(
         lambda x: player2ratings(x, player_skills))
-    ranking_teams.sort_values("player_skills", ascending=False, inplace=True)
-    ranking_teams.drop("player_skills", axis="columns", inplace=True)
+    ranking_teams.sort_values("team_skill", ascending=False, inplace=True)
+    ranking_teams.drop("team_skill", axis="columns", inplace=True)
     return ranking_teams
 
 
