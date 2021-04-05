@@ -142,7 +142,7 @@ class EMRatingModel:
         pred_proba = self.model.predict_proba(features).cpu().view(-1)
         assert pred_proba.shape[0] == self._hidden_variables.shape[0]
         # This tensor contains fake value is equal to 0 at last position
-        self._predicted_proba[:self._hidden_variables.shape[0]] = self.model.predict_proba(features).cpu().view(-1)
+        self._predicted_proba[:self._hidden_variables.shape[0]] = pred_proba
         self._update_hidden_values(self._predicted_proba)
 
     def fit(self, sparse_features, target, players_info: pd.DataFrame,
