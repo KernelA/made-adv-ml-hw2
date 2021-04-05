@@ -4,12 +4,12 @@ stages:
     cmd: python ./to_pandas.py -i ./data/raw_data/chgk.zip -o ./data/pickle_data
     deps:
     - path: ./data/raw_data/chgk.zip
-      md5: 5d57364ef120d752bf920baec82dc030
-      size: 176605878
+      md5: d371f93fda55f73c6541fc971e5ef43e
+      size: 110319626
     - path: ./rating_model
-      md5: 955a6c52789a45b7c268e48884ea8346.dir
-      size: 71390
-      nfiles: 28
+      md5: c8afaa2b1b060a5c7af7d0ac70c07d20.dir
+      size: 71199
+      nfiles: 27
     - path: ./to_pandas.py
       md5: 20f6c3bbf054cce8a7364052dfd9f8f8
       size: 1851
@@ -26,9 +26,9 @@ stages:
       md5: b7a2f034d6996163e600a6c7f74f5887
       size: 588847
     - path: ./rating_model
-      md5: 955a6c52789a45b7c268e48884ea8346.dir
-      size: 71390
-      nfiles: 28
+      md5: c8afaa2b1b060a5c7af7d0ac70c07d20.dir
+      size: 71199
+      nfiles: 27
     - path: ./train_test_split.py
       md5: 1967eb5d2c6e53e4cb2d1c5e9fc25a86
       size: 2177
