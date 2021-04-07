@@ -2,9 +2,15 @@ channels:
   - defaults
   - conda-forge
 dependencies:
+  - python=3.8
+  - pip
   - ipykernel
   - pandas=1.2
   - scipy=1.5
   - scikit-learn=0.24
   - pylint
+  - tqdm=4.59
   - dvc-base=1.11
+  - cudatoolkit=11.1
+  - pytorch==1.8
+  - tensorboard=2.4

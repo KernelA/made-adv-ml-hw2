@@ -23,10 +23,20 @@ LOGGER_SETUP = {
             'level': 'DEBUG',
             'handlers': ['default_console'],
             'propagate': False
+        },
+        'rating_model.torch_trainer': {
+            'level': 'DEBUG',
+            'handlers': ['default_console'],
+            'propagate': False
+        },
+        'rating_model.em_algo': {
+            'level': 'DEBUG',
+            'handlers': ['default_console'],
+            'propagate': False
         }
     },
     'root': {
-        'level': 'DEBUG',
+        'level': 'INFO',
         'handlers': ['default_console']
     }
 }

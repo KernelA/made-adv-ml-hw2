@@ -2,7 +2,7 @@ import pickle
 import warnings
 from operator import attrgetter
 from dataclasses import dataclass, field, fields
-from typing import Dict, List, Optional, Tuple, MutableSet
+from typing import Dict, List, Optional, Tuple
 import logging
 
 import tqdm
@@ -147,34 +147,61 @@ class TeamResults:
     def filter_incorrect_questions_tours(self):
         total_none_questions = 0
         total_questions = 0
+        total_deleted_teams = 0
+        total_teams = 0
 
         for tour_id in tqdm.tqdm(self.tours, total=len(self), desc="Filter questions"):
             answers = []
+            team_ids = []
+
+            total_teams += len(self.tours[tour_id].teams)
+            teams_with_mask = 0
 
             for team_id in self.tours[tour_id].teams:
-                if self.tours[tour_id][team_id].mask is not None:
-                    answers.append(self.tours[tour_id][team_id].mask)
+                team = self.tours[tour_id][team_id]
+                if team.mask is not None:
+                    answers.append(team.mask)
+                    team_ids.append(team_id)
+                    teams_with_mask += 1
+
             if answers:
+                total_questions_in_tour = max(map(len, answers))
+                total_questions += total_questions_in_tour
+
+                delete_row_indices = [row_num for row_num, answer_mask in enumerate(
+                    answers) if total_questions_in_tour != len(answer_mask)]
+
+                total_deleted_teams += len(delete_row_indices)
+
+                for del_row_num in delete_row_indices:
+                    team_id = team_ids[del_row_num]
+                    self.tours[tour_id].teams.pop(team_id)
+                    teams_with_mask -= 1
+
+                answers = [answer for pos, answer in enumerate(answers) if pos not in delete_row_indices]
+                team_ids = [team_id for pos, team_id in enumerate(team_ids) if pos not in delete_row_indices]
+
                 # transpose table
                 answers = tuple(zip(*answers))
-                delete_row = []
-                for row_index in range(len(answers)):
-                    if any(map(lambda x: x is None, answers[row_index])):
-                        delete_row.append(row_index)
 
-                total_none_questions += len(delete_row)
-                total_questions += len(answers)
+                delete_row_indices = [row_index for row_index, answer_col in enumerate(
+                    answers) if any(map(lambda x: x is None, answer_col))]
+
+                total_none_questions += len(delete_row_indices)
                 # transpose again return original order
                 filtered_answer = tuple(
-                    zip(*tuple(row for i, row in enumerate(answers) if i not in delete_row)))
+                    zip(*tuple(row for i, row in enumerate(answers) if i not in delete_row_indices)))
 
-                index = 0
-                for team_id in self.tours[tour_id].teams:
-                    if self.tours[tour_id][team_id].mask is not None:
-                        self.tours[tour_id][team_id].mask = filtered_answer[index]
-                        index += 1
-        LOGGER.info("Detect total incorrect answers %d from %d",
-                    total_none_questions, total_questions)
+                assert len(filtered_answer) == teams_with_mask or len(filtered_answer) == 0
+                question_length = len(filtered_answer[0])
+                assert all(map(lambda x: len(x) == question_length, filtered_answer))
+
+                for row_num, team_id in enumerate(team_ids):
+                    assert self.tours[tour_id][team_id].mask is not None
+                    self.tours[tour_id][team_id].mask = filtered_answer[row_num]
+
+        LOGGER.info("Detect total incorrect answers %d from %d. Delete teams: %d of %d",
+                    total_none_questions, total_questions, total_deleted_teams, total_teams)
 
     def to_player_dataframe(self, filter_by_mask: bool = False) -> pd.DataFrame:
         records = []
@@ -206,7 +233,7 @@ class TeamResults:
                 if data is None:
                     data = pd.DataFrame.from_records(records)
                 else:
-                    data = data.append(pd.DataFrame.from_records(records))
+                    data = data.append(pd.DataFrame.from_records(records), ignore_index=True)
                 records.clear()
 
             global_answer_id_shift += answer_shift
