@@ -1,23 +1,24 @@
 stages:
   to-pandas-pickle:
-    cmd: python ./to_pandas.py -i ./data/raw_data/chgk.zip -o ./data/pickle_data
+    cmd: python ./to_pandas.py --years 2018 2019 2020 -i ./data/raw_data/chgk.zip -o ./data/pickle_data
     deps:
-    - ./data/raw_data/chgk.zip
-    - ./to_pandas.py
-    - ./rating_model
+      - ./data/raw_data/chgk.zip
+      - ./to_pandas.py
+      - ./rating_model
     outs:
-    - ./data/pickle_data
+      - ./data/pickle_data
   train_test_split:
-    cmd: python ./train_test_split.py -i ./data/raw_data/chgk.zip --tournaments ./data/pickle_data/tournaments-dt.pickle
+    cmd:
+      python ./train_test_split.py -i ./data/raw_data/chgk.zip --tournaments ./data/pickle_data/tournaments-dt.pickle
       -o ./data/team_res
     deps:
-    - ./data/pickle_data/tournaments-dt.pickle
-    - ./train_test_split.py
-    - ./rating_model
+      - ./data/pickle_data/tournaments-dt.pickle
+      - ./train_test_split.py
+      - ./rating_model
     outs:
-    - ./data/team_res
+      - ./data/team_res
   test_log_reg:
     cmd: python ./test_log_reg.py
     deps:
-    - ./rating_model
-    - ./test_log_reg.py
+      - ./rating_model
+      - ./test_log_reg.py

@@ -3,6 +3,7 @@ import zipfile
 import pathlib
 import pickle
 import argparse
+import logging
 
 import pandas as pd
 
@@ -35,6 +36,15 @@ def main(args):
             results = TeamResults.load_pickle(file_info)
 
     results.filter_incorrect_questions_tours()
+
+    for year in tours["dateStart"].dt.year[tours["dateStart"].dt.year < args.test_year].unique():
+        part_tours_ids = tours.index[tours["dateStart"].dt.year == year]
+        logging.getLogger().info("Year is: %s, selected indices %s", year, len(part_tours_ids))
+        if year == args.test_year - 1:
+            save_filtered_data(results, part_tours_ids, out_dir / "train_team_results.pickle")
+        else:
+            save_filtered_data(results, part_tours_ids, out_dir / f"train_team_results_{year}.pickle")
+
     train_tour_ids = tours.index[tours["dateStart"].dt.year == args.train_year]
     test_tour_ids = tours.index[tours["dateStart"].dt.year == args.test_year]
 
