@@ -17,6 +17,9 @@ def main(args):
     out_dir = pathlib.Path(args.out_dir)
     out_dir.mkdir(exist_ok=True, parents=True)
 
+    if args.years:
+        args.years = list(map(int, args.years))
+
     with zipfile.ZipFile(args.input, "r") as zip_file:
         players = unpickle_zip(zip_file, "players.pkl")
         players = pd.DataFrame.from_dict(players, orient="index")
@@ -32,7 +35,8 @@ def main(args):
         tournaments.drop("id", axis="columns", inplace=True)
         tournaments["dateStart"] = pd.to_datetime(tournaments["dateStart"], utc=True)
         tournaments["dateEnd"] = pd.to_datetime(tournaments["dateEnd"], utc=True)
-        tournaments = tournaments[tournaments["dateStart"].dt.year.isin(args.years)]
+        if args.years:
+            tournaments = tournaments[tournaments["dateStart"].dt.year.isin(args.years)]
         tournaments.to_pickle(out_dir / "tournaments-dt.pickle", protocol=PICKLE_PROTOCOL)
 
         del tournaments
@@ -43,8 +47,7 @@ if __name__ == '__main__':
     parser.add_argument("-i", "--input", type=str,
                         required=True, help="A path to zip file")
     parser.add_argument("-o", dest="out_dir", type=str, required=True, help="A path to out dir")
-    parser.add_argument("--years",  nargs="+",
-                        default=[2019, 2020], help="Save only selected years")
+    parser.add_argument("--years",  nargs="+", default=None, help="Save only selected years")
 
     args = parser.parse_args()
 
