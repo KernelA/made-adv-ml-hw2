@@ -2,7 +2,7 @@
 
 [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/KernelA/made-adv-ml-hw2/blob/master/solution.ipynb)
 
-[Описание задачи](https://docs.google.com/document/d/1MapaSpMax0cEnnY2-QJ2XMgzVHpj_UrucJK-1r5FgA8/edit)
+[Описание задачи](/task.pdf)
 
 [Описание API](http://api.rating.chgk.net/tournaments)
 
@@ -27,6 +27,7 @@
 ```
 conda env create -n env_name --file ./environment.yml
 conda activate env_name
+pip install -r ./requirements.txt
 ```
 Если исходных данных нет в директории `data`, то выполнить команду:
 ```
@@ -38,4 +39,4 @@ git lfs pull
 dvc repro train_test_split
 ```
 
-Запустить `jupyter lab` или `notebook`.
+Запустить `jupyter lab` или `notebook`. Открыть `solution.ipynb`.
